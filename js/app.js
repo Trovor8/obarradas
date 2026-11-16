@@ -4,7 +4,8 @@ const C = window.CONFIG, $ = (s, r = document) => r.querySelector(s), $$ = (s, r
 const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const HOME = document.body.classList.contains('page-home'), MENU_PAGE = document.body.classList.contains('page-menu');
-let lang = store.get('barradas.lang') || ((navigator.language || 'pt').toLowerCase().startsWith('pt') ? 'pt' : 'en');
+const urlLang = (new URLSearchParams(location.search).get('lang') || '').toLowerCase();
+let lang = ['pt', 'en'].includes(urlLang) ? urlLang : (store.get('barradas.lang') === 'en' ? 'en' : 'pt'); // PT por defeito
 const T = () => window.I18N.js[lang];
 const L = o => (o && typeof o === 'object') ? (o[lang] || o.pt) : o;
 const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -40,7 +41,7 @@ function applyLang() {
   $$('[data-i18n]').forEach(el => { const k = el.dataset.i18n; if (!ptCache.has(el)) ptCache.set(el, el.textContent); el.textContent = lang === 'en' && en[k] ? en[k] : ptCache.get(el); });
   $$('[data-i18n-html]').forEach(el => { const k = el.dataset.i18nHtml; if (!ptCache.has(el)) ptCache.set(el, el.innerHTML); el.innerHTML = lang === 'en' && en[k] ? en[k] : ptCache.get(el); });
   $$('[data-i18n-ph]').forEach(el => { const k = el.dataset.i18nPh; if (!ptCache.has(el)) ptCache.set(el, el.placeholder); el.placeholder = lang === 'en' && en[k] ? en[k] : ptCache.get(el); });
-  $$('#langBtn span').forEach(s => s.classList.toggle('is-on', s.dataset.l === lang));
+  $$('#langBtn [data-l]').forEach(b => { b.classList.toggle('is-on', b.dataset.l === lang); b.setAttribute('aria-pressed', b.dataset.l === lang); });
   if (has('menuList')) renderMenu();
   if (has('wineCard')) { renderWine(curWine); renderTimeline(); }
   if (has('revTrack')) renderReviews();
@@ -50,7 +51,19 @@ function applyLang() {
   if (has('hours')) renderHours();
   tick(); weatherText();
 }
-$('#langBtn').addEventListener('click', () => { lang = lang === 'pt' ? 'en' : 'pt'; store.set('barradas.lang', lang); applyLang(); });
+function setLang(l) { if (l === lang) return; lang = l; store.set('barradas.lang', l); applyLang(); hideLangTip(); }
+$$('#langBtn [data-l], .langtip__go').forEach(b => b.addEventListener('click', () => setLang(b.dataset.l)));
+/* Sugestão discreta para visitantes cujo browser não está em português (só na 1.ª visita) */
+const langTip = $('#langTip');
+function hideLangTip() { if (langTip && !langTip.hidden) { langTip.classList.remove('is-on'); store.set('barradas.langtip', '1'); setTimeout(() => { langTip.hidden = true; }, 400); } }
+if (langTip) {
+  langTip.querySelector('.langtip__x').addEventListener('click', hideLangTip);
+  const nav = (navigator.language || 'pt').toLowerCase();
+  if (lang === 'pt' && !nav.startsWith('pt') && !store.get('barradas.lang') && !store.get('barradas.langtip')) {
+    setTimeout(() => { langTip.hidden = false; requestAnimationFrame(() => langTip.classList.add('is-on')); }, 2200);
+    setTimeout(hideLangTip, 14000);
+  }
+}
 
 /* ---------- Loader ---------- */
 function boot() {
